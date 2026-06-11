@@ -1,7 +1,7 @@
 {
-  "name": "guestbook",
+  "name": "msg",
   "version": "1.0.0",
-  "description": "现代化留言板 - Cloudflare Pages + D1",
+  "description": "留声机 · Msg - 现代化留言板",
   "scripts": {
     "dev": "npx wrangler pages dev public --d1 DB=guestbook-db",
     "deploy": "npx wrangler pages deploy public",

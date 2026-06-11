@@ -1,4 +1,4 @@
-# 留声机 · Guestbook
+# 留声机 · Msg
 
 一个基于 **Material Design 3** 色彩系统的现代化留言板，部署在 **Cloudflare Pages + D1 数据库**。
 
