@@ -1,0 +1,11 @@
+{
+  "name": "guestbook",
+  "version": "1.0.0",
+  "description": "现代化留言板 - Cloudflare Pages + D1",
+  "scripts": {
+    "dev": "npx wrangler pages dev public --d1 DB=guestbook-db",
+    "deploy": "npx wrangler pages deploy public",
+    "db:init": "npx wrangler d1 execute guestbook-db --file=./schema.sql",
+    "db:init:local": "npx wrangler d1 execute guestbook-db --local --file=./schema.sql"
+  }
+}

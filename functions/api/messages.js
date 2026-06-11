@@ -1,0 +1,168 @@
+// GET /api/messages - 获取留言列表（含点赞数和反应）
+// POST /api/messages - 创建新留言
+
+export async function onRequestGet(context) {
+    const { env, request } = context;
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get('session_id') || '';
+    const search = url.searchParams.get('search') || '';
+    const sort = url.searchParams.get('sort') || 'newest';
+
+    try {
+        let query = `
+            SELECT 
+                m.id, m.author_name, m.avatar_seed, m.content, m.session_id, m.created_at,
+                COALESCE(like_counts.total, 0) as like_count,
+                CASE WHEN user_likes.id IS NOT NULL THEN 1 ELSE 0 END as user_liked
+            FROM messages m
+            LEFT JOIN (
+                SELECT message_id, COUNT(*) as total 
+                FROM likes GROUP BY message_id
+            ) like_counts ON m.id = like_counts.message_id
+            LEFT JOIN likes user_likes ON m.id = user_likes.message_id AND user_likes.session_id = ?
+        `;
+        const params = [sessionId];
+
+        if (search) {
+            query += ` WHERE m.content LIKE ? OR m.author_name LIKE ?`;
+            params.push(`%${search}%`, `%${search}%`);
+        }
+
+        if (sort === 'oldest') {
+            query += ` ORDER BY m.created_at ASC`;
+        } else if (sort === 'popular') {
+            query += ` ORDER BY like_counts.total DESC, m.created_at DESC`;
+        } else {
+            query += ` ORDER BY m.created_at DESC`;
+        }
+
+        query += ` LIMIT 50`;
+
+        const { results: messages } = await env.DB.prepare(query).bind(...params).all();
+
+        // 获取每条留言的反应统计
+        const messageIds = messages.map(m => m.id);
+        let reactionsMap = {};
+
+        if (messageIds.length > 0) {
+            const placeholders = messageIds.map(() => '?').join(',');
+            const { results: reactions } = await env.DB.prepare(`
+                SELECT message_id, reaction_type, COUNT(*) as count,
+                       CASE WHEN session_id = ? THEN 1 ELSE 0 END as user_reacted
+                FROM reactions
+                WHERE message_id IN (${placeholders})
+                GROUP BY message_id, reaction_type
+            `).bind(sessionId, ...messageIds).all();
+
+            for (const r of reactions) {
+                if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
+                reactionsMap[r.message_id].push({
+                    type: r.reaction_type,
+                    count: r.count,
+                    user_reacted: !!r.user_reacted
+                });
+            }
+        }
+
+        // 附加反应到留言
+        const enriched = messages.map(m => ({
+            ...m,
+            user_liked: !!m.user_liked,
+            reactions: reactionsMap[m.id] || []
+        }));
+
+        // 获取统计信息
+        const { results: stats } = await env.DB.prepare(
+            `SELECT COUNT(*) as total_messages, COUNT(DISTINCT session_id) as active_users FROM messages`
+        ).all();
+
+        return new Response(JSON.stringify({
+            success: true,
+            messages: enriched,
+            stats: {
+                total_messages: stats[0].total_messages,
+                active_users: stats[0].active_users
+            }
+        }), {
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
+    } catch (error) {
+        console.error('Fetch messages error:', error);
+        return new Response(JSON.stringify({
+            success: false,
+            error: '获取留言失败'
+        }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+}
+
+export async function onRequestPost(context) {
+    const { env, request } = context;
+
+    try {
+        const body = await request.json();
+        const { author_name, avatar_seed, content, session_id } = body;
+
+        if (!author_name || !content || !session_id) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: '缺少必要字段'
+            }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        if (author_name.length > 20) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: '名字不能超过20个字符'
+            }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        if (content.length > 500) {
+            return new Response(JSON.stringify({
+                success: false,
+                error: '留言内容不能超过500个字符'
+            }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        const result = await env.DB.prepare(
+            "INSERT INTO messages (author_name, avatar_seed, content, session_id) VALUES (?, ?, ?, ?)"
+        ).bind(author_name, avatar_seed || author_name, content, session_id).run();
+
+        const { results } = await env.DB.prepare(
+            "SELECT id, author_name, avatar_seed, content, session_id, created_at FROM messages WHERE id = ?"
+        ).bind(result.meta.last_row_id).all();
+
+        return new Response(JSON.stringify({
+            success: true,
+            message: { ...results[0], like_count: 0, user_liked: false, reactions: [] }
+        }), {
+            status: 201,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        });
+    } catch (error) {
+        return new Response(JSON.stringify({
+            success: false,
+            error: '发布留言失败'
+        }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+}
