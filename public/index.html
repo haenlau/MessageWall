@@ -1162,11 +1162,10 @@ const adj = ['快乐的','勇敢的','聪明的','温柔的','神秘的','幸运
 const noun = ['小猫','小狗','兔子','狐狸','熊猫','海豚','星星','月亮','云朵','花朵','蝴蝶','小鸟','松鼠','鹿','鲸鱼','海鸥','柴犬','刺猬','考拉','水母'];
 function randName() { return adj[Math.floor(Math.random()*adj.length)] + noun[Math.floor(Math.random()*noun.length)]; }
 
-// ---- Avatar (DiceBear) ----
+// ---- Avatar (via Cloudflare proxy) ----
 const AV_STYLES = ['lorelei','micah','notionists','open-peeps','personas','avataaars','big-ears','fun-emoji','thumbs'];
 function avatarUrl(seed) {
-    const style = AV_STYLES[Math.abs(hashStr(seed)) % AV_STYLES.length];
-    return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}&radius=50&size=128`;
+    return `${API}/avatar/${encodeURIComponent(seed)}`;
 }
 function hashStr(s) { let h=0; for(let i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i)|0; return h; }
 
