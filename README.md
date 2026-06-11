@@ -18,9 +18,11 @@
 | 😀 **表情反应** | 6 种快速表情：👍 ❤️ 😂 😮 👏 🔥 |
 | 🔍 **搜索功能** | 实时搜索留言内容和昵称（350ms 防抖） |
 | 📊 **排序选项** | 最新 / 最热 / 最早 三种排序方式 |
-| 🌙 **暗色模式** | 一键切换明暗主题，localStorage 自动记忆 |
+| 🌙 **主题切换** | 亮色 / 暗色 / 跟随系统 三态切换 |
+| 📄 **分页浏览** | 默认每页 5 条，可选 10 / 30 条 |
 | 📈 **数据统计** | 首页卡片实时显示总留言数和访客数 |
 | 🔒 **权限控制** | 只能删除自己的留言，无法删除他人留言 |
+| 🔑 **管理员** | 管理员可删除任意留言，密码通过环境变量配置 |
 | 📱 **响应式设计** | 完美适配手机、平板、桌面端 |
 | ⚡ **骨架屏** | 加载时显示优雅的骨架动画 |
 | 💬 **确认弹窗** | 删除前弹出 Material 风格确认对话框 |
@@ -204,9 +206,38 @@ npm run deploy
 
 ---
 
-## 🗄️ 数据库架构
+## 🗄️ 数据库绑定与环境变量
 
-### 表结构
+### D1 数据库绑定
+
+| 绑定名 | 类型 | 说明 |
+|--------|------|------|
+| `DB` | D1 Database | 存储留言、点赞、反应数据 |
+
+### 环境变量 / 密钥
+
+| 变量名 | 类型 | 说明 |
+|--------|------|------|
+| `ADMIN_USER` | 环境变量 (文本) | 管理员登录账号 |
+| `ADMIN_PASS` | 密钥 (Secret) | 管理员登录密码 |
+
+> ⚠️ **安全建议**：`ADMIN_PASS` 应使用 Wrangler Secret 存储，不要明文写入配置文件。
+
+#### 设置方式
+
+**方式一：Cloudflare Dashboard**
+1. 进入 Pages 项目 → **Settings** → **Environment variables**
+2. 添加 `ADMIN_USER`（类型选 Variable）
+3. 添加 `ADMIN_PASS`（类型选 Secret）
+
+**方式二：Wrangler CLI**
+```bash
+# 设置账号（普通环境变量）
+npx wrangler pages secret put ADMIN_USER
+
+# 设置密码（加密存储）
+npx wrangler pages secret put ADMIN_PASS
+```
 
 ```sql
 -- 留言主表
@@ -404,6 +435,44 @@ Content-Type: application/json
 }
 ```
 
+### 管理员登录
+
+```http
+POST /api/admin/login
+Content-Type: application/json
+
+{
+  "username": "你的管理员账号",
+  "password": "你的管理员密码"
+}
+```
+
+**验证规则：**
+- 账号密码与环境变量 `ADMIN_USER` 和 `ADMIN_PASS` 匹配
+
+**响应（成功）：**
+```json
+{
+  "success": true,
+  "token": "sha256_hash_token",
+  "message": "登录成功"
+}
+```
+
+**响应（失败）：**
+```json
+{
+  "success": false,
+  "error": "账号或密码错误"
+}
+```
+
+**说明：**
+- 登录成功后返回 `token`，客户端存储在 sessionStorage
+- 管理员删除留言时，请求体附带 `admin_token` 字段
+- 管理员可以删除任意用户的留言
+- 顶栏 👤 按钮点击弹出登录框，登录后变为 🔑，再次点击退出
+
 ---
 
 ## 📁 项目结构
@@ -412,18 +481,21 @@ Content-Type: application/json
 guestbook/
 │
 ├── public/                          # 静态前端文件（Cloudflare Pages 输出目录）
-│   └── index.html                   # 主页面（45KB，包含完整 UI 和逻辑）
+│   └── index.html                   # 主页面（包含完整 UI 和逻辑）
 │
 ├── functions/                       # Cloudflare Functions（API 后端）
 │   └── api/
 │       ├── messages.js              # GET/POST /api/messages
+│       ├── admin/
+│       │   └── login.js             # POST /api/admin/login
 │       └── messages/
-│           ├── [id].js              # DELETE /api/messages/:id
+│           ├── [id].js              # DELETE /api/messages/:id（支持管理员删除）
 │           └── [id]/
 │               ├── like.js          # POST /api/messages/:id/like
 │               └── react.js         # POST /api/messages/:id/react
 │
 ├── schema.sql                       # D1 数据库初始化脚本（3 张表 + 5 个索引）
+├── migrate.sql                      # 测试数据迁移脚本
 ├── wrangler.toml                    # Cloudflare Workers 配置
 ├── package.json                     # 项目配置和 npm 脚本
 ├── .gitignore                       # Git 忽略文件

@@ -614,6 +614,8 @@
 
         .msg-card:hover .msg-delete-btn { opacity: 1; }
 
+        body.admin-mode .msg-delete-btn { opacity: 1; }
+
         .msg-delete-btn:hover {
             background: var(--md-error-container);
             color: var(--md-on-error-container);
@@ -1050,7 +1052,8 @@
     <nav class="top-bar">
         <div class="top-bar-title">留声机<span>·</span>Guestbook</div>
         <div class="top-bar-actions">
-            <button class="icon-btn" id="themeToggle" title="切换主题" aria-label="切换主题">🌙</button>
+            <button class="icon-btn" id="adminBtn" title="管理员" aria-label="管理员">👤</button>
+            <button class="icon-btn" id="themeToggle" title="切换主题" aria-label="切换主题">💻</button>
         </div>
     </nav>
 
@@ -1188,16 +1191,113 @@ function loadIdentity() {
     } else shuffleIdentity();
 }
 
-// ---- Theme ----
-let darkMode = localStorage.getItem('gb_theme') === 'dark';
-function applyTheme() {
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-    document.getElementById('themeToggle').textContent = darkMode ? '☀️' : '🌙';
+// ---- Theme (3-state: light → dark → system) ----
+// 'gb_theme' values: 'light' | 'dark' | 'system' (default)
+let themeMode = localStorage.getItem('gb_theme') || 'system';
+const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+function resolvedDark() {
+    if (themeMode === 'system') return systemDark.matches;
+    return themeMode === 'dark';
 }
-function toggleTheme() {
-    darkMode = !darkMode;
-    localStorage.setItem('gb_theme', darkMode ? 'dark' : 'light');
+function applyTheme() {
+    document.documentElement.setAttribute('data-theme', resolvedDark() ? 'dark' : 'light');
+    const icons = { light: '☀️', dark: '🌙', system: '💻' };
+    const titles = { light: '亮色模式', dark: '暗色模式', system: '跟随系统' };
+    document.getElementById('themeToggle').textContent = icons[themeMode];
+    document.getElementById('themeToggle').title = titles[themeMode];
+}
+function cycleTheme() {
+    const order = ['light', 'dark', 'system'];
+    themeMode = order[(order.indexOf(themeMode) + 1) % 3];
+    localStorage.setItem('gb_theme', themeMode);
     applyTheme();
+}
+// Listen for OS theme changes when in system mode
+systemDark.addEventListener('change', () => { if (themeMode === 'system') applyTheme(); });
+
+// ---- Admin ----
+let adminToken = sessionStorage.getItem('gb_admin_token') || null;
+
+function isAdmin() { return !!adminToken; }
+
+function updateAdminBtn() {
+    const btn = document.getElementById('adminBtn');
+    if (isAdmin()) {
+        btn.textContent = '🔑';
+        btn.title = '管理员已登录 (点击退出)';
+        btn.style.background = 'color-mix(in srgb, var(--md-primary) 15%, transparent)';
+        document.body.classList.add('admin-mode');
+    } else {
+        btn.textContent = '👤';
+        btn.title = '管理员登录';
+        btn.style.background = '';
+        document.body.classList.remove('admin-mode');
+    }
+}
+
+function showLoginDialog() {
+    if (isAdmin()) {
+        // Logout
+        adminToken = null;
+        sessionStorage.removeItem('gb_admin_token');
+        updateAdminBtn();
+        fetchMessages();
+        toast('已退出管理员');
+        return;
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay';
+    overlay.innerHTML = `
+        <div class="dialog-box">
+            <div class="dialog-title">管理员登录</div>
+            <div class="dialog-body">
+                <input type="text" id="loginUser" placeholder="账号" autocomplete="username"
+                    style="width:100%;padding:10px 14px;border:1px solid var(--md-outline-variant);border-radius:var(--md-shape-sm);background:var(--md-surface-container-lowest);color:var(--md-on-surface);font-family:inherit;font-size:14px;margin-bottom:10px;outline:none;">
+                <input type="password" id="loginPass" placeholder="密码" autocomplete="current-password"
+                    style="width:100%;padding:10px 14px;border:1px solid var(--md-outline-variant);border-radius:var(--md-shape-sm);background:var(--md-surface-container-lowest);color:var(--md-on-surface);font-family:inherit;font-size:14px;outline:none;">
+            </div>
+            <div class="dialog-actions">
+                <button class="btn-text" data-action="cancel">取消</button>
+                <button class="btn-filled" data-action="login">登录</button>
+            </div>
+        </div>`;
+
+    function close() { overlay.remove(); }
+    overlay.addEventListener('click', e => {
+        const a = e.target.dataset.action;
+        if (a === 'cancel') close();
+        if (a === 'login') doLogin(overlay);
+    });
+    overlay.querySelector('#loginPass').addEventListener('keydown', e => {
+        if (e.key === 'Enter') doLogin(overlay);
+    });
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.querySelector('#loginUser').focus(), 100);
+}
+
+async function doLogin(overlay) {
+    const user = overlay.querySelector('#loginUser').value.trim();
+    const pass = overlay.querySelector('#loginPass').value;
+    if (!user || !pass) return toast('请输入账号和密码');
+    try {
+        const res = await fetch(`${API}/admin/login`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ username: user, password: pass })
+        });
+        const data = await res.json();
+        if (data.success) {
+            adminToken = data.token;
+            sessionStorage.setItem('gb_admin_token', adminToken);
+            overlay.remove();
+            updateAdminBtn();
+            fetchMessages();
+            toast('管理员登录成功 🔑');
+        } else {
+            toast(data.error || '登录失败');
+        }
+    } catch(e) { toast('网络错误'); }
 }
 
 // ---- Toast ----
@@ -1300,10 +1400,12 @@ async function deleteMessage(id) {
     const ok = await confirmDialog('删除留言', '确定要删除这条留言吗？删除后无法恢复。');
     if (!ok) return;
     try {
+        const body = { session_id: getSessionId() };
+        if (adminToken) body.admin_token = adminToken;
         const res = await fetch(`${API}/messages/${id}`, {
             method: 'DELETE',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ session_id: getSessionId() })
+            body: JSON.stringify(body)
         });
         const data = await res.json();
         if (data.success) { toast('已删除'); fetchMessages(); }
@@ -1377,10 +1479,10 @@ function renderMessages(messages) {
             <div class="msg-header">
                 <div class="msg-avatar"><img src="${av}" alt="${esc(m.author_name)}"></div>
                 <div class="msg-meta">
-                    <div class="msg-author">${esc(m.author_name)}${isOwn?'<span class="msg-own-badge">我</span>':''}</div>
+                    <div class="msg-author">${esc(m.author_name)}${isOwn?'<span class="msg-own-badge">我</span>':''}${isAdmin() && !isOwn?'<span class="msg-own-badge" style="background:var(--md-tertiary-container);color:var(--md-on-tertiary-container)">管理</span>':''}</div>
                     <div class="msg-time">${fmtTime(m.created_at)}</div>
                 </div>
-                ${isOwn ? `<button class="msg-delete-btn" onclick="deleteMessage(${m.id})">删除</button>` : ''}
+                ${(isOwn || isAdmin()) ? `<button class="msg-delete-btn" onclick="deleteMessage(${m.id})">删除</button>` : ''}
             </div>
             <div class="msg-content">${esc(m.content)}</div>
             <div class="msg-actions">
@@ -1464,10 +1566,12 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', () => {
     applyTheme();
     loadIdentity();
+    updateAdminBtn();
     fetchMessages();
 
     document.getElementById('btnShuffle').addEventListener('click', shuffleIdentity);
-    document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+    document.getElementById('themeToggle').addEventListener('click', cycleTheme);
+    document.getElementById('adminBtn').addEventListener('click', showLoginDialog);
     document.getElementById('btnSubmit').addEventListener('click', postMessage);
     document.getElementById('messageInput').addEventListener('input', updateCounter);
     document.getElementById('userName').addEventListener('input', function() {

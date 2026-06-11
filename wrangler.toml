@@ -1,6 +1,10 @@
 name = "guestbook"
 compatibility_date = "2024-01-01"
 
+# 环境变量（在 Cloudflare Dashboard 或通过 wrangler secret 设置）
+# ADMIN_USER = 管理员账号（文本）
+# ADMIN_PASS = 管理员密码（建议使用 wrangler secret）
+
 [[d1_databases]]
 binding = "DB"
 database_name = "guestbook-db"

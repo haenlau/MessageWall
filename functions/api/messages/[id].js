@@ -1,4 +1,4 @@
-// DELETE /api/messages/:id - 删除留言（同时删除关联的点赞和反应）
+// DELETE /api/messages/:id - 删除留言（支持本人删除或管理员删除）
 
 export async function onRequestDelete(context) {
     const { env, params, request } = context;
@@ -6,9 +6,9 @@ export async function onRequestDelete(context) {
 
     try {
         const body = await request.json();
-        const { session_id } = body;
+        const { session_id, admin_token } = body;
 
-        if (!session_id) {
+        if (!session_id && !admin_token) {
             return new Response(JSON.stringify({ success: false, error: '缺少会话标识' }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' }
@@ -26,7 +26,10 @@ export async function onRequestDelete(context) {
             });
         }
 
-        if (results[0].session_id !== session_id) {
+        const isOwner = results[0].session_id === session_id;
+        const isAdmin = admin_token ? await verifyAdminToken(env, admin_token) : false;
+
+        if (!isOwner && !isAdmin) {
             return new Response(JSON.stringify({ success: false, error: '只能删除自己的留言' }), {
                 status: 403,
                 headers: { 'Content-Type': 'application/json' }
@@ -47,6 +50,16 @@ export async function onRequestDelete(context) {
             headers: { 'Content-Type': 'application/json' }
         });
     }
+}
+
+// 验证 admin token
+async function verifyAdminToken(env, token) {
+    if (!token || !env.ADMIN_PASS) return false;
+    const data = new TextEncoder().encode('guestbook_admin_' + env.ADMIN_PASS);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const expected = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return token === expected;
 }
 
 export async function onRequestOptions() {
