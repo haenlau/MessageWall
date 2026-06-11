@@ -949,6 +949,97 @@
             .toolbar { flex-direction: column; }
             .sort-chips { overflow-x: auto; }
             .hero-stats { gap: 14px; }
+            .pagination-bar { flex-wrap: wrap; gap: 8px; }
+            .pagination-info { width: 100%; justify-content: center; }
+        }
+
+        /* ============ Pagination ============ */
+        .pagination-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            margin-top: 16px;
+            background: var(--md-surface-container-lowest);
+            border-radius: var(--md-shape-lg);
+            border: 1px solid var(--md-outline-variant);
+            box-shadow: var(--md-elevation-1);
+            gap: 12px;
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            color: var(--md-outline);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .page-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--md-shape-full);
+            border: none;
+            background: transparent;
+            color: var(--md-on-surface);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--md-motion-duration-short);
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: color-mix(in srgb, var(--md-primary) 12%, transparent);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .page-btn.active {
+            background: var(--md-primary);
+            color: var(--md-on-primary);
+            font-weight: 600;
+        }
+
+        .page-btn.nav-arrow {
+            font-size: 18px;
+        }
+
+        .per-page-select {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--md-outline);
+        }
+
+        .per-page-select select {
+            padding: 6px 10px;
+            border-radius: var(--md-shape-sm);
+            border: 1px solid var(--md-outline-variant);
+            background: var(--md-surface-container-lowest);
+            color: var(--md-on-surface);
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .per-page-select select:focus {
+            border-color: var(--md-primary);
         }
     </style>
 </head>
@@ -1029,6 +1120,20 @@
             <div class="skeleton-line w-80"></div>
         </div>
     </div>
+
+    <!-- Pagination -->
+    <nav class="pagination-bar" id="paginationBar" style="display:none">
+        <div class="per-page-select">
+            <span>每页</span>
+            <select id="perPageSelect">
+                <option value="5" selected>5 条</option>
+                <option value="10">10 条</option>
+                <option value="30">30 条</option>
+            </select>
+        </div>
+        <div class="pagination-controls" id="paginationControls"></div>
+        <div class="pagination-info" id="paginationInfo"></div>
+    </nav>
 </div>
 
 <!-- Toast Container -->
@@ -1143,16 +1248,22 @@ function esc(s) { const d=document.createElement('div'); d.textContent=s; return
 let currentSort = 'newest';
 let searchTimer = null;
 let openPicker = null;
+let currentPage = 1;
+let perPage = parseInt(localStorage.getItem('gb_per_page') || '5', 10);
+let paginationData = null;
 
 // ---- API: Fetch Messages ----
-async function fetchMessages() {
+async function fetchMessages(page) {
+    if (page !== undefined) currentPage = page;
     const search = document.getElementById('searchInput').value.trim();
-    const url = `${API}/messages?session_id=${getSessionId()}&sort=${currentSort}${search ? '&search='+encodeURIComponent(search) : ''}`;
+    const url = `${API}/messages?session_id=${getSessionId()}&sort=${currentSort}&page=${currentPage}&limit=${perPage}${search ? '&search='+encodeURIComponent(search) : ''}`;
     try {
         const res = await fetch(url);
         const data = await res.json();
         if (data.success) {
+            paginationData = data.pagination;
             renderMessages(data.messages);
+            renderPagination();
             document.getElementById('statMessages').textContent = data.stats.total_messages;
             document.getElementById('statUsers').textContent = data.stats.active_users;
         }
@@ -1178,7 +1289,7 @@ async function postMessage() {
             document.getElementById('messageInput').value = '';
             updateCounter();
             toast('留言发布成功 ✨');
-            fetchMessages();
+            fetchMessages(1);
         } else toast(data.error || '发布失败');
     } catch(e) { toast('网络错误'); }
     finally { btn.disabled = false; }
@@ -1289,6 +1400,46 @@ function renderMessages(messages) {
     }).join('');
 }
 
+// ---- Render Pagination ----
+function renderPagination() {
+    const bar = document.getElementById('paginationBar');
+    const controls = document.getElementById('paginationControls');
+    const info = document.getElementById('paginationInfo');
+
+    if (!paginationData || paginationData.total_pages <= 1) {
+        bar.style.display = 'none';
+        return;
+    }
+
+    bar.style.display = 'flex';
+    const { page, total, total_pages, has_prev, has_next } = paginationData;
+    const start = (page - 1) * perPage + 1;
+    const end = Math.min(page * perPage, total);
+
+    info.textContent = `${start}-${end} / 共 ${total} 条`;
+
+    // Build page buttons
+    let btns = '';
+    btns += `<button class="page-btn nav-arrow" ${has_prev ? '' : 'disabled'} onclick="fetchMessages(${page-1})">‹</button>`;
+
+    // Page number logic: show first, last, current ± 1
+    const pages = new Set();
+    pages.add(1);
+    pages.add(total_pages);
+    for (let i = Math.max(1, page-1); i <= Math.min(total_pages, page+1); i++) pages.add(i);
+
+    const sorted = [...pages].sort((a,b) => a-b);
+    let prev = 0;
+    for (const p of sorted) {
+        if (p - prev > 1) btns += `<span style="color:var(--md-outline);padding:0 2px;font-size:12px">…</span>`;
+        btns += `<button class="page-btn${p===page?' active':''}" onclick="fetchMessages(${p})">${p}</button>`;
+        prev = p;
+    }
+
+    btns += `<button class="page-btn nav-arrow" ${has_next ? '' : 'disabled'} onclick="fetchMessages(${page+1})">›</button>`;
+    controls.innerHTML = btns;
+}
+
 function togglePicker(btn, msgId) {
     const picker = btn.nextElementSibling;
     if (openPicker && openPicker !== picker) openPicker.classList.remove('open');
@@ -1324,20 +1475,29 @@ document.addEventListener('DOMContentLoaded', () => {
         saveIdentity();
     });
 
-    // Search with debounce
+    // Search with debounce (reset to page 1)
     document.getElementById('searchInput').addEventListener('input', () => {
         clearTimeout(searchTimer);
-        searchTimer = setTimeout(fetchMessages, 350);
+        searchTimer = setTimeout(() => fetchMessages(1), 350);
     });
 
-    // Sort chips
+    // Sort chips (reset to page 1)
     document.querySelectorAll('.chip[data-sort]').forEach(chip => {
         chip.addEventListener('click', () => {
             document.querySelector('.chip.active').classList.remove('active');
             chip.classList.add('active');
             currentSort = chip.dataset.sort;
-            fetchMessages();
+            fetchMessages(1);
         });
+    });
+
+    // Per-page selector
+    const perPageSelect = document.getElementById('perPageSelect');
+    perPageSelect.value = String(perPage);
+    perPageSelect.addEventListener('change', () => {
+        perPage = parseInt(perPageSelect.value, 10);
+        localStorage.setItem('gb_per_page', String(perPage));
+        fetchMessages(1);
     });
 
     // Ctrl+Enter to submit

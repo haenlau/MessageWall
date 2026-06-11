@@ -1,4 +1,4 @@
-// GET /api/messages - 获取留言列表（含点赞数和反应）
+// GET /api/messages - 获取留言列表（含分页、点赞数和反应）
 // POST /api/messages - 创建新留言
 
 export async function onRequestGet(context) {
@@ -7,8 +7,29 @@ export async function onRequestGet(context) {
     const sessionId = url.searchParams.get('session_id') || '';
     const search = url.searchParams.get('search') || '';
     const sort = url.searchParams.get('sort') || 'newest';
+    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '5', 10)));
+    const offset = (page - 1) * limit;
 
     try {
+        // 构建 WHERE 子句
+        let whereClause = '';
+        const countParams = [];
+        const queryParams = [sessionId];
+
+        if (search) {
+            whereClause = ` WHERE m.content LIKE ? OR m.author_name LIKE ?`;
+            countParams.push(`%${search}%`, `%${search}%`);
+            queryParams.push(`%${search}%`, `%${search}%`);
+        }
+
+        // 查询总数
+        const countQuery = `SELECT COUNT(*) as total FROM messages m${whereClause}`;
+        const { results: countResult } = await env.DB.prepare(countQuery).bind(...countParams).all();
+        const totalMessages = countResult[0].total;
+        const totalPages = Math.ceil(totalMessages / limit);
+
+        // 查询留言（带分页）
         let query = `
             SELECT 
                 m.id, m.author_name, m.avatar_seed, m.content, m.session_id, m.created_at,
@@ -20,13 +41,8 @@ export async function onRequestGet(context) {
                 FROM likes GROUP BY message_id
             ) like_counts ON m.id = like_counts.message_id
             LEFT JOIN likes user_likes ON m.id = user_likes.message_id AND user_likes.session_id = ?
+            ${whereClause}
         `;
-        const params = [sessionId];
-
-        if (search) {
-            query += ` WHERE m.content LIKE ? OR m.author_name LIKE ?`;
-            params.push(`%${search}%`, `%${search}%`);
-        }
 
         if (sort === 'oldest') {
             query += ` ORDER BY m.created_at ASC`;
@@ -36,9 +52,10 @@ export async function onRequestGet(context) {
             query += ` ORDER BY m.created_at DESC`;
         }
 
-        query += ` LIMIT 50`;
+        query += ` LIMIT ? OFFSET ?`;
+        queryParams.push(limit, offset);
 
-        const { results: messages } = await env.DB.prepare(query).bind(...params).all();
+        const { results: messages } = await env.DB.prepare(query).bind(...queryParams).all();
 
         // 获取每条留言的反应统计
         const messageIds = messages.map(m => m.id);
@@ -79,6 +96,14 @@ export async function onRequestGet(context) {
         return new Response(JSON.stringify({
             success: true,
             messages: enriched,
+            pagination: {
+                page,
+                limit,
+                total: totalMessages,
+                total_pages: totalPages,
+                has_next: page < totalPages,
+                has_prev: page > 1
+            },
             stats: {
                 total_messages: stats[0].total_messages,
                 active_users: stats[0].active_users
