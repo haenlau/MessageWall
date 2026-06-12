@@ -1054,7 +1054,7 @@
         <div class="top-bar-title">留声机<span>·</span>Msg</div>
         <div class="top-bar-actions">
             <button class="icon-btn" id="adminBtn" title="管理员" aria-label="管理员">👤</button>
-            <button class="icon-btn" id="themeToggle" title="切换主题" aria-label="切换主题">💻</button>
+            <button class="icon-btn" id="themeToggle" title="切换暗色" aria-label="切换主题">🌙</button>
         </div>
     </nav>
 
@@ -1191,30 +1191,19 @@ function loadIdentity() {
     } else shuffleIdentity();
 }
 
-// ---- Theme (3-state: light → dark → system) ----
-// 'gb_theme' values: 'light' | 'dark' | 'system' (default)
-let themeMode = localStorage.getItem('gb_theme') || 'system';
-const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+// ---- Theme (light ↔ dark) ----
+let darkMode = localStorage.getItem('gb_theme') === 'dark';
 
-function resolvedDark() {
-    if (themeMode === 'system') return systemDark.matches;
-    return themeMode === 'dark';
-}
 function applyTheme() {
-    document.documentElement.setAttribute('data-theme', resolvedDark() ? 'dark' : 'light');
-    const icons = { light: '☀️', dark: '🌙', system: '💻' };
-    const titles = { light: '亮色模式', dark: '暗色模式', system: '跟随系统' };
-    document.getElementById('themeToggle').textContent = icons[themeMode];
-    document.getElementById('themeToggle').title = titles[themeMode];
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    document.getElementById('themeToggle').textContent = darkMode ? '☀️' : '🌙';
+    document.getElementById('themeToggle').title = darkMode ? '切换亮色' : '切换暗色';
 }
-function cycleTheme() {
-    const order = ['light', 'dark', 'system'];
-    themeMode = order[(order.indexOf(themeMode) + 1) % 3];
-    localStorage.setItem('gb_theme', themeMode);
+function toggleTheme() {
+    darkMode = !darkMode;
+    localStorage.setItem('gb_theme', darkMode ? 'dark' : 'light');
     applyTheme();
 }
-// Listen for OS theme changes when in system mode
-systemDark.addEventListener('change', () => { if (themeMode === 'system') applyTheme(); });
 
 // ---- Admin ----
 let adminToken = sessionStorage.getItem('gb_admin_token') || null;
@@ -1582,7 +1571,7 @@ document.addEventListener('DOMContentLoaded', () => {
     recordVisit();
 
     document.getElementById('btnShuffle').addEventListener('click', shuffleIdentity);
-    document.getElementById('themeToggle').addEventListener('click', cycleTheme);
+    document.getElementById('themeToggle').addEventListener('click', toggleTheme);
     document.getElementById('adminBtn').addEventListener('click', showLoginDialog);
     document.getElementById('btnSubmit').addEventListener('click', postMessage);
     document.getElementById('messageInput').addEventListener('input', updateCounter);
