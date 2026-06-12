@@ -72,7 +72,7 @@
 #### 第一步：Fork 或使用本仓库
 
 ```
-仓库地址: https://github.com/haenlau/guestbook
+仓库地址: https://github.com/haenlau/MessageWall
 ```
 
 #### 第二步：登录 Cloudflare Dashboard
@@ -86,13 +86,13 @@
 #### 第三步：连接 GitHub 仓库
 
 1. 授权 Cloudflare 访问你的 GitHub 账号
-2. 选择 `haenlau/guestbook` 仓库
+2. 选择 `haenlau/MessageWall` 仓库
 3. 点击 **Begin setup**
 
 #### 第四步：配置构建设置
 
 ```
-Project name: guestbook（或自定义名称）
+Project name: messagewall（或自定义名称）
 Production branch: main
 
 Build settings:
@@ -139,8 +139,8 @@ npm install -g wrangler
 wrangler login
 
 # 克隆仓库
-git clone https://github.com/haenlau/guestbook.git
-cd guestbook
+git clone https://github.com/haenlau/MessageWall.git
+cd MessageWall
 
 # 初始化数据库（需要先在 wrangler.toml 中填入 database_id）
 npm run db:init
@@ -166,7 +166,7 @@ database_id = "你的数据库ID"  # ← 替换这里
 
 部署完成后，Cloudflare 会分配一个域名，格式为：
 ```
-https://guestbook.pages.dev
+https://messagewall.pages.dev
 ```
 
 你也可以在项目设置中绑定自定义域名。
@@ -177,8 +177,8 @@ https://guestbook.pages.dev
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/haenlau/guestbook.git
-cd guestbook
+git clone https://github.com/haenlau/MessageWall.git
+cd MessageWall
 
 # 2. 安装 wrangler
 npm install -g wrangler
@@ -478,7 +478,7 @@ Content-Type: application/json
 ## 📁 项目结构
 
 ```
-guestbook/
+MessageWall/
 │
 ├── public/                          # 静态前端文件（Cloudflare Pages 输出目录）
 │   └── index.html                   # 主页面（包含完整 UI 和逻辑）
@@ -647,7 +647,7 @@ MIT License
 
 ## 🔗 相关链接
 
-- **仓库地址**: https://github.com/haenlau/guestbook
+- **仓库地址**: https://github.com/haenlau/MessageWall
 - **Cloudflare Dashboard**: https://dash.cloudflare.com/
 - **Cloudflare Pages 文档**: https://developers.cloudflare.com/pages/
 - **D1 数据库文档**: https://developers.cloudflare.com/d1/
