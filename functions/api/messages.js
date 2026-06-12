@@ -90,7 +90,9 @@ export async function onRequestGet(context) {
 
         // 获取统计信息
         const { results: stats } = await env.DB.prepare(
-            `SELECT COUNT(*) as total_messages, COUNT(DISTINCT session_id) as active_users FROM messages`
+            `SELECT 
+                (SELECT COUNT(*) FROM messages) as total_messages,
+                (SELECT COUNT(*) FROM visitors) as active_users`
         ).all();
 
         return new Response(JSON.stringify({

@@ -39,3 +39,11 @@ CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_likes_message_id ON likes(message_id);
 CREATE INDEX IF NOT EXISTS idx_likes_session_id ON likes(session_id);
 CREATE INDEX IF NOT EXISTS idx_reactions_message_id ON reactions(message_id);
+
+-- 访客表（记录每个到访用户，用于统计独立访客数）
+CREATE TABLE IF NOT EXISTS visitors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL UNIQUE,
+    first_visit DATETIME DEFAULT (datetime('now')),
+    last_visit DATETIME DEFAULT (datetime('now'))
+);

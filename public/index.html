@@ -1344,6 +1344,17 @@ function fmtTime(s) {
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
+// ---- Record Visit ----
+async function recordVisit() {
+    try {
+        await fetch(`${API}/visit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: getSessionId() })
+        });
+    } catch (e) { /* silent */ }
+}
+
 // ---- State ----
 let currentSort = 'newest';
 let searchTimer = null;
@@ -1568,6 +1579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadIdentity();
     updateAdminBtn();
     fetchMessages();
+    recordVisit();
 
     document.getElementById('btnShuffle').addEventListener('click', shuffleIdentity);
     document.getElementById('themeToggle').addEventListener('click', cycleTheme);
