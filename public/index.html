@@ -1328,11 +1328,14 @@ function fmtTime(s) {
     if (diff < 3600000) return Math.floor(diff/60000) + ' 分钟前';
     if (diff < 86400000) return Math.floor(diff/3600000) + ' 小时前';
     if (diff < 604800000) return Math.floor(diff/86400000) + ' 天前';
-    // 上海时区格式: 2026/1/18 01:32
-    const sh = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-    const y = sh.getFullYear(), mo = sh.getMonth()+1, da = sh.getDate();
-    const h = String(sh.getHours()).padStart(2,'0'), mi = String(sh.getMinutes()).padStart(2,'0');
-    return `${y}/${mo}/${da} ${h}:${mi}`;
+    // 上海时区 UTC+8
+    const parts = new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(d);
+    const get = type => parts.find(p => p.type === type).value;
+    return `${get('year')}/${get('month')}/${get('day')} ${get('hour')}:${get('minute')}`;
 }
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
