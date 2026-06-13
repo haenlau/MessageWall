@@ -1191,8 +1191,8 @@ function loadIdentity() {
     } else shuffleIdentity();
 }
 
-// ---- Theme (light ↔ dark) ----
-let darkMode = localStorage.getItem('gb_theme') === 'dark';
+// ---- Theme (light ↔ dark, default light) ----
+let darkMode = localStorage.getItem('gb_theme') === 'dark'; // 无值时 false = 亮色
 
 function applyTheme() {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
