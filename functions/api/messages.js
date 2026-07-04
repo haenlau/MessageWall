@@ -65,7 +65,7 @@ export async function onRequestGet(context) {
             const placeholders = messageIds.map(() => '?').join(',');
             const { results: reactions } = await env.DB.prepare(`
                 SELECT message_id, reaction_type, COUNT(*) as count,
-                       CASE WHEN session_id = ? THEN 1 ELSE 0 END as user_reacted
+                       MAX(CASE WHEN session_id = ? THEN 1 ELSE 0 END) as user_reacted
                 FROM reactions
                 WHERE message_id IN (${placeholders})
                 GROUP BY message_id, reaction_type

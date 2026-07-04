@@ -44,7 +44,7 @@ export async function onRequestPost(context) {
         // 获取该留言所有反应统计
         const { results: reactions } = await env.DB.prepare(`
             SELECT reaction_type, COUNT(*) as count,
-                   CASE WHEN session_id = ? THEN 1 ELSE 0 END as user_reacted
+                   MAX(CASE WHEN session_id = ? THEN 1 ELSE 0 END) as user_reacted
             FROM reactions WHERE message_id = ?
             GROUP BY reaction_type
         `).bind(session_id, messageId).all();
