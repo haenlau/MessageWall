@@ -173,9 +173,22 @@ export async function onRequestPost(context) {
             "SELECT id, author_name, avatar_seed, content, session_id, created_at FROM messages WHERE id = ?"
         ).bind(result.meta.last_row_id).all();
 
+        const message = results[0];
+        const notifyTask = sendTelegramNotification(env, {
+            content: message.content,
+            created_at: message.created_at,
+            ip: getClientIp(request)
+        });
+
+        if (context.waitUntil) {
+            context.waitUntil(notifyTask);
+        } else {
+            notifyTask.catch(error => console.error('Telegram notification failed:', error));
+        }
+
         return new Response(JSON.stringify({
             success: true,
-            message: { ...results[0], like_count: 0, user_liked: false, reactions: [] }
+            message: { ...message, like_count: 0, user_liked: false, reactions: [] }
         }), {
             status: 201,
             headers: {
@@ -191,5 +204,66 @@ export async function onRequestPost(context) {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
         });
+    }
+}
+
+function getClientIp(request) {
+    const forwardedFor = request.headers.get('X-Forwarded-For');
+
+    return request.headers.get('CF-Connecting-IP') ||
+        request.headers.get('True-Client-IP') ||
+        (forwardedFor ? forwardedFor.split(',')[0].trim() : '') ||
+        'unknown';
+}
+
+function formatMessageTime(createdAt) {
+    if (!createdAt) return 'unknown';
+
+    const normalized = createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T');
+    const date = new Date(normalized.endsWith('Z') ? normalized : `${normalized}Z`);
+    if (Number.isNaN(date.getTime())) return createdAt;
+
+    return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).format(date);
+}
+
+async function sendTelegramNotification(env, message) {
+    const token = env.TELEGRAM_BOT_TOKEN;
+    const chatId = env.TELEGRAM_CHAT_ID;
+
+    if (!token || !chatId) return;
+
+    const text = [
+        '收到新留言',
+        `时间：${formatMessageTime(message.created_at)}`,
+        `IP：${message.ip}`,
+        '',
+        '留言内容：',
+        message.content
+    ].join('\n');
+
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text
+            })
+        });
+
+        if (!response.ok) {
+            console.error('Telegram notification failed:', await response.text());
+        }
+    } catch (error) {
+        console.error('Telegram notification failed:', error);
     }
 }
