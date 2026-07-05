@@ -175,6 +175,7 @@ export async function onRequestPost(context) {
 
         const message = results[0];
         const notifyTask = sendTelegramNotification(env, {
+            author_name: message.author_name,
             content: message.content,
             created_at: message.created_at,
             ip: getClientIp(request)
@@ -243,10 +244,12 @@ async function sendTelegramNotification(env, message) {
 
     const text = [
         '收到新留言',
+        '',
+        `昵称：${message.author_name}`,
         `时间：${formatMessageTime(message.created_at)}`,
         `IP：${message.ip}`,
         '',
-        '留言内容：',
+        '内容：',
         message.content
     ].join('\n');
 
