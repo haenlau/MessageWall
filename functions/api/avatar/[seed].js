@@ -10,11 +10,25 @@ export async function onRequestGet(context) {
         return new Response('Missing seed', { status: 400 });
     }
 
-    // 从 seed 解析 style（与前端 hashStr 逻辑一致）
+    // 从 seed 解析 style（支持 explicit-style: seed 格式如 "lorelei:haenlau"，向后兼容纯 seed hash）
     const AV_STYLES = ['lorelei', 'micah', 'notionists', 'open-peeps', 'personas', 'avataaars', 'big-ears', 'fun-emoji', 'thumbs'];
-    const style = AV_STYLES[Math.abs(hashStr(seed)) % AV_STYLES.length];
+    let style;
+    let actualSeed = seed;
 
-    const dicebearUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}&radius=50&size=128`;
+    if (seed.includes(':')) {
+        const parts = seed.split(':');
+        const candidateStyle = parts[0];
+        if (AV_STYLES.includes(candidateStyle)) {
+            style = candidateStyle;
+            actualSeed = parts.slice(1).join(':') || 'default';
+        }
+    }
+
+    if (!style) {
+        style = AV_STYLES[Math.abs(hashStr(seed)) % AV_STYLES.length];
+    }
+
+    const dicebearUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(actualSeed)}&radius=50&size=128`;
 
     try {
         const response = await fetch(dicebearUrl, {

@@ -287,6 +287,31 @@
             background: var(--md-surface-container-highest);
             overflow: hidden;
             border: 2px solid var(--md-primary);
+            cursor: pointer;
+            transition: transform var(--md-motion-duration-short), box-shadow var(--md-motion-duration-short);
+            position: relative;
+        }
+
+        .identity-avatar:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-primary) 25%, transparent);
+        }
+
+        .identity-avatar::after {
+            content: "🎨";
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity var(--md-motion-duration-short);
+        }
+
+        .identity-avatar:hover::after {
+            opacity: 1;
         }
 
         .identity-avatar img {
@@ -342,6 +367,90 @@
             font-size: 11px;
             color: var(--md-outline);
             margin-top: 4px;
+        }
+
+        .identity-lock-btn {
+            background: transparent;
+            border: 1px solid var(--md-outline-variant);
+            color: var(--md-outline);
+            border-radius: var(--md-shape-full);
+            padding: 6px 12px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all var(--md-motion-duration-short);
+            white-space: nowrap;
+            flex-shrink: 0;
+            user-select: none;
+        }
+
+        .identity-lock-btn:hover {
+            border-color: var(--md-primary);
+            color: var(--md-primary);
+            background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+        }
+
+        .identity-lock-btn.pinned {
+            background: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+            border-color: transparent;
+            font-weight: 500;
+        }
+
+        /* Avatar Picker Grid */
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 16px 0;
+            max-height: 280px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+
+        .avatar-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 6px;
+            border-radius: var(--md-shape-md);
+            border: 1.5px solid var(--md-outline-variant);
+            background: var(--md-surface-container-lowest);
+            cursor: pointer;
+            transition: all var(--md-motion-duration-short);
+        }
+
+        .avatar-option:hover {
+            border-color: var(--md-primary);
+            background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+            transform: translateY(-2px);
+        }
+
+        .avatar-option.selected {
+            border-color: var(--md-primary);
+            background: var(--md-primary-container);
+            box-shadow: 0 0 0 2px var(--md-primary);
+        }
+
+        .avatar-option img {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--md-shape-full);
+            display: block;
+        }
+
+        .avatar-option span {
+            font-size: 11px;
+            color: var(--md-on-surface-variant);
+        }
+
+        .avatar-option.selected span {
+            color: var(--md-on-primary-container);
+            font-weight: 600;
         }
 
         /* ============ Compose Area ============ */
@@ -945,8 +1054,9 @@
         @media (max-width: 480px) {
             .hero-card { padding: 20px 16px; }
             .hero-title { font-size: 22px; }
-            .identity-card { padding: 12px 14px; gap: 10px; }
+            .identity-card { padding: 12px 14px; gap: 10px; flex-wrap: wrap; }
             .identity-avatar { width: 44px; height: 44px; }
+            .identity-lock-btn { width: 100%; justify-content: center; margin-top: 4px; }
             .msg-card { padding: 14px 16px; }
             .msg-delete-btn { opacity: 1; }
             .toolbar { flex-direction: column; }
@@ -1077,13 +1187,17 @@
     <!-- Identity -->
     <section class="identity-card">
         <div class="identity-avatar-wrap">
-            <div class="identity-avatar"><img id="userAvatar" src="" alt=""></div>
-            <div class="identity-shuffle-badge" id="btnShuffle" title="随机换一个">🎲</div>
+            <div class="identity-avatar" id="avatarPickerTrigger" title="点击更换头像风格"><img id="userAvatar" src="" alt=""></div>
+            <div class="identity-shuffle-badge" id="btnShuffle" title="随机换一个身份">🎲</div>
         </div>
         <div class="identity-info">
             <input type="text" class="identity-name-input" id="userName" placeholder="你的昵称…" maxlength="20" spellcheck="false">
-            <div class="identity-hint">点击骰子换一个随机身份，或自己输入</div>
+            <div class="identity-hint">点击头像选风格，点击骰子随机，点击右侧可固定身份</div>
         </div>
+        <button class="identity-lock-btn" id="btnPinIdentity" title="固定当前身份，刷新/下次访问不丢失">
+            <span class="pin-icon">📌</span>
+            <span class="pin-text">固定身份</span>
+        </button>
     </section>
 
     <!-- Compose -->
@@ -1163,32 +1277,201 @@ const noun = ['小猫','小狗','兔子','狐狸','熊猫','海豚','星星','�
 function randName() { return adj[Math.floor(Math.random()*adj.length)] + noun[Math.floor(Math.random()*noun.length)]; }
 
 // ---- Avatar (via Cloudflare proxy) ----
-const AV_STYLES = ['lorelei','micah','notionists','open-peeps','personas','avataaars','big-ears','fun-emoji','thumbs'];
+const AV_STYLES = [
+    { id: 'lorelei', name: '插画风' },
+    { id: 'micah', name: '极简人物' },
+    { id: 'notionists', name: '诺顿线稿' },
+    { id: 'open-peeps', name: '涂鸦人物' },
+    { id: 'personas', name: '个性剪影' },
+    { id: 'avataaars', name: '经典卡通' },
+    { id: 'big-ears', name: '大耳朵' },
+    { id: 'fun-emoji', name: '趣味表情' },
+    { id: 'thumbs', name: '笑脸拇指' }
+];
 function avatarUrl(seed) {
     return `${API}/avatar/${encodeURIComponent(seed)}`;
 }
 function hashStr(s) { let h=0; for(let i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i)|0; return h; }
 
 // ---- Identity ----
-let curName='', curSeed='';
-function shuffleIdentity() {
-    curName = randName();
-    curSeed = curName + '_' + Date.now();
+let curName='', curSeed='', curStyle='', isPinned=false;
+
+function getPureSeed(seed) {
+    if (!seed) return '';
+    return seed.includes(':') ? seed.split(':').slice(1).join(':') : seed;
+}
+
+function getStyleFromSeed(seed) {
+    if (!seed) return '';
+    if (seed.includes(':')) {
+        const candidate = seed.split(':')[0];
+        if (AV_STYLES.some(s => s.id === candidate)) return candidate;
+    }
+    const idx = Math.abs(hashStr(seed)) % AV_STYLES.length;
+    return AV_STYLES[idx].id;
+}
+
+function updateIdentityDisplay() {
     document.getElementById('userName').value = curName;
     document.getElementById('userAvatar').src = avatarUrl(curSeed);
+    updatePinButton();
+}
+
+function updatePinButton() {
+    const btn = document.getElementById('btnPinIdentity');
+    if (!btn) return;
+    if (isPinned) {
+        btn.classList.add('pinned');
+        btn.querySelector('.pin-icon').textContent = '📌';
+        btn.querySelector('.pin-text').textContent = '已固定身份';
+        btn.title = '当前身份已保存到本机，点击取消固定';
+    } else {
+        btn.classList.remove('pinned');
+        btn.querySelector('.pin-icon').textContent = '📍';
+        btn.querySelector('.pin-text').textContent = '固定身份';
+        btn.title = '固定当前身份，下次访问不丢失';
+    }
+}
+
+function togglePinIdentity() {
+    isPinned = !isPinned;
+    if (isPinned) {
+        if (!curName) {
+            curName = randName();
+            curSeed = curStyle ? `${curStyle}:${curName}` : curName;
+            updateIdentityDisplay();
+        }
+        localStorage.setItem('gb_pinned_identity', '1');
+        localStorage.setItem('gb_pinned_name', curName);
+        localStorage.setItem('gb_pinned_seed', curSeed);
+        localStorage.setItem('gb_pinned_style', curStyle || '');
+        saveIdentity();
+        toast('已固定当前昵称与头像 📌');
+    } else {
+        localStorage.removeItem('gb_pinned_identity');
+        localStorage.removeItem('gb_pinned_name');
+        localStorage.removeItem('gb_pinned_seed');
+        localStorage.removeItem('gb_pinned_style');
+        saveIdentity();
+        toast('已解除身份固定');
+    }
+    updatePinButton();
+}
+
+function shuffleIdentity() {
+    curName = randName();
+    // 随机时如果用户选过固定风格，则应用固定风格，否则使用纯名字种子（一致且稳定）
+    curSeed = curStyle ? `${curStyle}:${curName}` : curName;
+    updateIdentityDisplay();
+    if (isPinned) {
+        localStorage.setItem('gb_pinned_name', curName);
+        localStorage.setItem('gb_pinned_seed', curSeed);
+    }
     saveIdentity();
 }
+
 function saveIdentity() {
     sessionStorage.setItem('gb_name', curName);
     sessionStorage.setItem('gb_seed', curSeed);
+    sessionStorage.setItem('gb_style', curStyle || '');
+    if (isPinned) {
+        localStorage.setItem('gb_pinned_name', curName);
+        localStorage.setItem('gb_pinned_seed', curSeed);
+        localStorage.setItem('gb_pinned_style', curStyle || '');
+    }
 }
+
 function loadIdentity() {
-    curName = sessionStorage.getItem('gb_name') || '';
-    curSeed = sessionStorage.getItem('gb_seed') || '';
+    const pinned = localStorage.getItem('gb_pinned_identity') === '1';
+    if (pinned) {
+        isPinned = true;
+        curName = localStorage.getItem('gb_pinned_name') || '';
+        curSeed = localStorage.getItem('gb_pinned_seed') || '';
+        curStyle = localStorage.getItem('gb_pinned_style') || '';
+    } else {
+        isPinned = false;
+        curName = sessionStorage.getItem('gb_name') || '';
+        curSeed = sessionStorage.getItem('gb_seed') || '';
+        curStyle = sessionStorage.getItem('gb_style') || '';
+    }
+
     if (curName && curSeed) {
-        document.getElementById('userName').value = curName;
-        document.getElementById('userAvatar').src = avatarUrl(curSeed);
-    } else shuffleIdentity();
+        updateIdentityDisplay();
+    } else {
+        shuffleIdentity();
+    }
+}
+
+// 供用户修改名字时同步更新头像种子（保持同一个名字产生固定稳定头像）
+function onNameInput(nameVal) {
+    curName = nameVal;
+    const baseSeed = curName || 'guest';
+    curSeed = curStyle ? `${curStyle}:${baseSeed}` : baseSeed;
+    document.getElementById('userAvatar').src = avatarUrl(curSeed);
+    saveIdentity();
+}
+
+// 弹出头像风格选择器
+function showAvatarPicker() {
+    const baseSeed = curName || 'avatar';
+    const activeStyle = curStyle || getStyleFromSeed(curSeed);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay';
+
+    let optionsHtml = AV_STYLES.map(style => {
+        const optionSeed = `${style.id}:${baseSeed}`;
+        const isSelected = style.id === activeStyle;
+        return `
+            <div class="avatar-option${isSelected ? ' selected' : ''}" data-style="${style.id}">
+                <img src="${avatarUrl(optionSeed)}" alt="${style.name}" loading="lazy">
+                <span>${style.name}</span>
+            </div>
+        `;
+    }).join('');
+
+    overlay.innerHTML = `
+        <div class="dialog-box" style="max-width:380px;">
+            <div class="dialog-title">选择头像风格 🎨</div>
+            <div class="dialog-body" style="margin-bottom:12px;">
+                <div style="font-size:12px;color:var(--md-outline);margin-bottom:8px;">
+                    为昵称「${esc(curName || '当前用户')}」挑选心仪的头像风格：
+                </div>
+                <div class="avatar-grid">
+                    ${optionsHtml}
+                </div>
+            </div>
+            <div class="dialog-actions">
+                <button class="btn-text" data-action="cancel">取消</button>
+                <button class="btn-filled" data-action="confirm">确定</button>
+            </div>
+        </div>
+    `;
+
+    let chosenStyle = activeStyle;
+    overlay.querySelectorAll('.avatar-option').forEach(el => {
+        el.addEventListener('click', () => {
+            overlay.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+            chosenStyle = el.dataset.style;
+        });
+    });
+
+    function close() { overlay.remove(); }
+    overlay.addEventListener('click', e => {
+        const a = e.target.dataset.action;
+        if (a === 'cancel') close();
+        if (a === 'confirm') {
+            curStyle = chosenStyle;
+            curSeed = `${curStyle}:${curName || 'guest'}`;
+            document.getElementById('userAvatar').src = avatarUrl(curSeed);
+            saveIdentity();
+            close();
+            toast('头像风格已更新 ✨');
+        }
+    });
+
+    document.body.appendChild(overlay);
 }
 
 // ---- Theme (light ↔ dark, default light) ----
@@ -1578,13 +1861,14 @@ document.addEventListener('DOMContentLoaded', () => {
     recordVisit();
 
     document.getElementById('btnShuffle').addEventListener('click', shuffleIdentity);
+    document.getElementById('btnPinIdentity').addEventListener('click', togglePinIdentity);
+    document.getElementById('avatarPickerTrigger').addEventListener('click', showAvatarPicker);
     document.getElementById('themeToggle').addEventListener('click', toggleTheme);
     document.getElementById('adminBtn').addEventListener('click', showLoginDialog);
     document.getElementById('btnSubmit').addEventListener('click', postMessage);
     document.getElementById('messageInput').addEventListener('input', updateCounter);
     document.getElementById('userName').addEventListener('input', function() {
-        curName = this.value.trim();
-        saveIdentity();
+        onNameInput(this.value.trim());
     });
 
     // Search with debounce (reset to page 1)
